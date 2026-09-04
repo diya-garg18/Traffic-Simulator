@@ -160,3 +160,53 @@ diagnosed, documented limitation stemming from the bucket-approximation
 model, not a bug. This is intentionally kept (not patched around) because
 it's a genuinely useful, concrete illustration of "planning is only as
 good as its model" for the interview-prep discussion — see `DECISIONS.md`.
+
+---
+
+## Feature: Evaluation harness (`evaluate.py`)
+
+**Scoped from:** `prompt.txt` section "5. Evaluation Script."
+
+**What was built:**
+- `run_episode(env, choose_action_fn)`: runs one episode with any
+  controller (all three share the same `choose_action(state) -> action`
+  shape, or a small lambda to adapt), returns per-step total waiting,
+  switch count, and max single-road queue.
+- Trains the Q-learning agent (500 episodes, `TRAIN_SEED=7`), solves the
+  value-iteration planner, and evaluates all three — plus a raw
+  fixed-timer baseline — against three separate `TrafficEnv` instances
+  that share one `EVAL_SEED=123`, deliberately different from
+  `TRAIN_SEED` so the comparison tests generalization, not memorization.
+- `print_summary_table()`: avg wait / max queue / switch count per
+  controller.
+- Three saved plots (`plots/` directory): cars-waiting-over-time for all
+  three controllers on one graph; the Q-learning training reward curve
+  (raw + rolling average); a rush-hour bonus plot comparing Q-learning's
+  and the baseline's cumulative switch count across the three traffic
+  phases (value iteration is excluded from this one — see
+  `value_iteration.py`'s own docstring on why it doesn't support
+  `rush_hour`).
+
+**What was tried / verified:**
+- Confirmed same-seed determinism directly: `numpy.random.default_rng(123)`
+  called twice, independently, produced the identical Poisson draw
+  sequence `[1, 0, 0, 0, 2]` — the guarantee the whole comparison depends
+  on (all three controllers face literally the same arrivals).
+- Ran `python evaluate.py` end to end. Real output:
+  ```
+  Controller          Avg wait   Max queue    Switches
+  ----------------------------------------------------
+  Q-learning              1.96           5          18
+  Baseline                3.97          10          10
+  Value iteration         2.03           5          12
+  ```
+  Q-learning's average wait is roughly half the baseline's, and its max
+  queue (5) is half the baseline's (10) — the learned policy is
+  genuinely better, not just different. Value iteration lands close to
+  Q-learning (2.03 vs 1.96), consistent with it being a near-optimal
+  planner for its (slightly approximate) model.
+- Visually inspected `plots/waiting_comparison.png`: the baseline's line
+  has the tallest, sharpest sawtooth peaks (up to 10), while Q-learning
+  and value iteration both stay visibly flatter and lower throughout.
+
+**Status:** Fully verified — real run, real numbers, plots inspected.

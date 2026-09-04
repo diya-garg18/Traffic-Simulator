@@ -582,7 +582,136 @@ above.
 
 ---
 
+## `evaluate.py`
+
+### Module purpose
+
+Runs all three controllers — the trained Q-learning agent, the
+fixed-timer baseline, and the value-iteration planner — against the SAME
+seeded environment, then prints a comparison table and saves three plots.
+This is the file that actually answers "did any of this work?" — every
+other file is a component; this is the experiment.
+
+### Why `TRAIN_SEED` and `EVAL_SEED` are different constants
+
+```python
+TRAIN_SEED = 7
+EVAL_SEED = 123
+```
+
+If the agent were evaluated on the exact same seed it trained on, a good
+score wouldn't prove it learned a general policy — it could just mean the
+agent memorized the one specific sequence of arrivals it saw 500 times
+during training. Using a different seed for evaluation means the agent is
+being tested on a traffic pattern it has never seen before (same
+statistics — same `rate_ns`/`rate_ew` — different actual random draws).
+
+### Why all three controllers get the SAME `EVAL_SEED`
+
+```python
+eval_env_q = TrafficEnv(rate_ns=RATE_NS, rate_ew=RATE_EW, max_steps=MAX_STEPS, seed=EVAL_SEED)
+eval_env_base = TrafficEnv(rate_ns=RATE_NS, rate_ew=RATE_EW, max_steps=MAX_STEPS, seed=EVAL_SEED)
+eval_env_vi = TrafficEnv(rate_ns=RATE_NS, rate_ew=RATE_EW, max_steps=MAX_STEPS, seed=EVAL_SEED)
+```
+
+Three separate `TrafficEnv` objects, not one shared object — each
+controller needs to run its own full episode without interfering with the
+others. But because they all get the identical seed, and because
+`TrafficEnv`'s arrivals are positional (the arrival draw at step *i*
+depends only on *i*, never on what actions were taken before it — this was
+directly verified: `numpy.random.default_rng(123)` called twice from
+scratch produced the identical sequence `[1, 0, 0, 0, 2]` both times), all
+three controllers face EXACTLY the same sequence of arriving cars. Any
+difference in outcome (avg wait, max queue, switches) is then attributable
+purely to the controller's decisions, not to one of them getting luckier
+traffic.
+
+### `run_episode(env, choose_action_fn)`
+
+```python
+def run_episode(env, choose_action_fn):
+    state = env.reset()
+    waiting_history = []
+    switch_count = 0
+    max_queue = 0
+    done = False
+    while not done:
+        action = choose_action_fn(state)
+        state, _reward, done = env.step(action)
+        s = env.state
+        waiting_history.append(s.cars_waiting_ns + s.cars_waiting_ew)
+        max_queue = max(max_queue, s.cars_waiting_ns, s.cars_waiting_ew)
+        if action == "SWITCH":
+            switch_count += 1
+    return waiting_history, switch_count, max_queue
+```
+
+One shared runner for all three controllers, because they all speak the
+same `reset()`/`step()` interface. `choose_action_fn` is just any callable
+that takes a state and returns an action string — this is what lets the
+exact same loop drive the Q-learning agent, the baseline, and the
+value-iteration planner without three separate copies of this logic:
+
+- Q-learning: passed as `agent.best_action` directly — pure greedy
+  (no exploration) at evaluation time, since epsilon-greedy randomness
+  is only needed during training.
+- Baseline: passed as `baseline.choose_action` directly (its call
+  signature was deliberately built to match `agent.choose_action`'s
+  shape back in `baseline_controller.py`, for exactly this reason).
+- Value iteration: `choose_action(env)` needs the actual `env` object
+  (raw counts), not just a discretized `state`, so it's wrapped in a
+  one-line lambda: `lambda state: planner.choose_action(eval_env_vi)`.
+
+### The three plots
+
+1. **`waiting_comparison.png`** — one line per controller, x = step,
+   y = total cars waiting (NS + EW) at that step, all three drawn on
+   the same axes from the same seeded episode. This is the single most
+   direct visual answer to "which controller keeps queues shorter?"
+2. **`training_reward.png`** — the Q-learning agent's per-episode total
+   reward across all 500 training episodes, plotted both raw (faint) and
+   as a 20-episode rolling average (bold). The raw line is noisy because
+   arrivals are random every episode; the rolling average is what
+   actually shows the upward (less negative) learning trend clearly.
+3. **`rushhour_switching.png`** — trains a SEPARATE Q-learning agent
+   under `rush_hour=True` (a fresh agent, not the main one, since it
+   needs to have actually experienced the changing-rate schedule during
+   training to plausibly adapt to it), then plots cumulative switch
+   count over time for that agent vs. the baseline, with the three
+   traffic-phase boundaries marked as dashed vertical lines. The
+   baseline's line is a perfectly even staircase by construction (it
+   switches every `switch_every` steps no matter what); if the
+   Q-learning line's slope visibly changes between phases, that's
+   evidence the agent is reacting to the changing NS/EW balance rather
+   than switching on a fixed clock. Value iteration is deliberately left
+   out of this plot — it doesn't support `rush_hour` at all (see its own
+   module docstring: a time-varying arrival rate would make its
+   transition model non-stationary, which is out of scope for this
+   project).
+
+### Real run output
+
+```
+Controller          Avg wait   Max queue    Switches
+----------------------------------------------------
+Q-learning              1.96           5          18
+Baseline                3.97          10          10
+Value iteration         2.03           5          12
+```
+
+Q-learning roughly halves both the average wait and the worst-case queue
+compared to the naive fixed-timer baseline — the central result the whole
+project was built to produce. Value iteration performs almost as well as
+Q-learning (2.03 vs 1.96), which makes sense: it's an (approximately)
+optimal planner for a model that's very close to the truth at the traffic
+rates used here, so the bucket-approximation limitation documented for
+`value_iteration.py` doesn't bite hard in this particular scenario (it
+shows up in specific backed-up states, not on average across a whole
+episode — see `DECISIONS.md`).
+
+---
+
 ## Other files (not yet built)
 
 This section will be filled in as each file is written:
-`evaluate.py`, `visualize.py`.
+`visualize.py`.

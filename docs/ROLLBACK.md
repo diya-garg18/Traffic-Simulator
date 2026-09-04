@@ -2,17 +2,26 @@
 
 Short plan for undoing a change if it breaks something.
 
-## Current state: no git repo
+## Current state: real git repo, pushed to GitHub
 
-This project is **not yet a git repository**. That means there is currently
-no commit history to revert to — the only rollback mechanism right now is
-manual (restoring a file you saved a copy of, or re-writing it from a
-previous message in this conversation).
+This project IS now a git repository, with history pushed to
+https://github.com/diya-garg18/Traffic-Simulator (`main` branch). Real
+rollback is available:
 
-**Recommendation:** once the environment + agent are both working, run
-`git init` and commit, so future risky changes (hyperparameter sweeps,
-refactors) have a real revert point. This has NOT been done automatically —
-it's a decision for you to make, not something to do silently.
+- **Undo the last commit (not yet pushed further):**
+  `git revert <commit-hash>` — creates a new commit that undoes the
+  changes, preserving history (safer than `reset` since it doesn't rewrite
+  anything already pushed).
+- **See what changed in any past commit:** `git show <commit-hash>` or
+  `git log -p -- <file>` for one file's full history.
+- **Restore one file to how it looked in an earlier commit:**
+  `git checkout <commit-hash> -- <file>` (careful: this discards
+  uncommitted changes to that file without asking twice — check
+  `git status` first).
+
+`prompt.txt` is a deliberate exception: it was intentionally removed from
+both git history's tracked state and the working directory, per explicit
+user request — it should NOT be "rolled back" or restored.
 
 ## Per-file rollback notes
 
