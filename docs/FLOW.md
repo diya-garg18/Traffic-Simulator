@@ -35,19 +35,32 @@ q_learning_agent.py  train()
     log total_reward for this episode
 ```
 
-## Planned flow for evaluate.py
+## Actual flow: evaluate.py
 
 ```
-evaluate.py
-  for each controller in [trained QLearningAgent, FixedTimerController, (ValueIteration policy)]:
-    env = TrafficEnv(..., seed=FIXED_SEED)      # same seed => same arrival sequence
-    state = env.reset()
-    loop until done:
-      action = controller.act(state)            # no further learning during eval
-      state, reward, done = env.step(action)
-      record queue length / switches / reward
-  plot all controllers' queue-length-over-time on one graph
-  print summary table (avg wait, max queue, switch count) per controller
+evaluate.py  main()
+  train_env = TrafficEnv(..., seed=TRAIN_SEED)
+  agent = QLearningAgent(seed=TRAIN_SEED).train(train_env, 500 episodes)
+
+  planner = ValueIteration(rate_ns, rate_ew).solve()
+
+  for each controller in [agent.best_action, baseline.choose_action, planner via lambda]:
+    env = TrafficEnv(..., seed=EVAL_SEED)     # SAME seed for all three, but a
+                                                # DIFFERENT seed than training
+    run_episode(env, choose_action_fn)
+       -> state = env.reset()
+       -> loop until done:
+            action = choose_action_fn(state)
+            state, reward, done = env.step(action)
+            record total waiting / max queue / switch count
+
+  print_summary_table(...)               # avg wait, max queue, switches
+  plot_waiting_comparison(...)           # all 3 controllers, one graph
+  plot_training_reward(training_rewards) # Q-learning's learning curve
+  plot_rush_hour_switching(agent)        # trains its OWN separate rush-hour
+                                          # agent, compares vs baseline only
+                                          # (value iteration excluded: no
+                                          # rush_hour support)
 ```
 
 ## Points where a bug is most likely to hide

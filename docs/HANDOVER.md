@@ -30,6 +30,8 @@ state.
   Value iteration close behind at 2.03.
 - `requirements.txt` — `numpy`, `matplotlib`, `scipy` (scipy is a hard
   dependency of `value_iteration.py`).
+- `README.md` — MDP formulation (state/action/reward/discount + why each
+  choice), how to run every file, and the real `evaluate.py` results table.
 - Project is a git repo, pushed to
   https://github.com/diya-garg18/Traffic-Simulator (main branch). `prompt.txt`
   is intentionally NOT tracked (deleted from both local and GitHub, per
@@ -48,18 +50,11 @@ state.
 
 1. `visualize.py` — optional simple animation/text demo (last remaining
    code deliverable; explicitly marked optional in the original spec).
-2. `README.md` — MDP formulation with justification for state/action/
-   reward/discount choices, how to run training/evaluation, expected
-   results summary. Not yet started.
-3. `docs/ROLLBACK.md` — update to reflect that real git-based rollback
-   (`git revert`/`git reset`) is now possible, since a real repo with
-   real history exists.
-4. After all code exists: interview-prep walkthrough of the Bellman
-   `update()` function line by line, 5 likely interview Q&As, and a list
-   of genuine design tradeoffs to highlight (the `value_iteration.py`
-   HIGH-bucket limitation is the strongest candidate, already fully
-   diagnosed).
-5. Keep pushing to GitHub after each meaningful chunk, with simple commit
+2. Interview-prep walkthrough of the Bellman `update()` function line by
+   line, 5 likely interview Q&As, and a list of genuine design tradeoffs
+   to highlight (the `value_iteration.py` HIGH-bucket limitation is the
+   strongest candidate, already fully diagnosed).
+3. Keep pushing to GitHub after each meaningful chunk, with simple commit
    messages (explicit standing user instruction).
 
 ## What to watch out for
