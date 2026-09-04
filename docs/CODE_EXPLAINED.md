@@ -164,8 +164,194 @@ code was written (see `docs/FEATURES.md`).
 
 ---
 
+## `q_learning_agent.py`
+
+### Module purpose
+
+Implements Q-learning itself: how the agent picks actions, and how it
+updates its belief about how good each action is in each state, purely
+from trial and error against `traffic_env.TrafficEnv` — no knowledge of
+arrival rates or departure rates is used anywhere in this file.
+
+### `StateType`
+
+```python
+StateType = Tuple[str, str, str, str]
+```
+Just a type-hint alias for "whatever `discretize_state()` returns" — makes
+function signatures below (`choose_action`, `update`, etc.) readable
+without repeating `Tuple[str, str, str, str]` everywhere.
+
+### `QLearningAgent.__init__`
+
+Stores the five hyperparameters (`alpha`, `gamma`, `epsilon_start`,
+`epsilon_end`, `epsilon_decay_episodes`) exactly as passed in — no
+validation/clamping, because this is a coursework tool used by one person
+who is expected to pass sane values. Creates `self._rng`, a NumPy
+`Generator`, used for every random decision the *agent* makes (as opposed
+to `self._rng` inside `TrafficEnv`, which is a separate, independent
+stream — this separation means changing how many random numbers the
+environment consumes doesn't shift which random numbers the agent
+consumes, keeping experiments reproducible and separable).
+
+`self.q_table: Dict[..., float] = defaultdict(float)` is the entire
+"brain" of the agent. A normal `dict` would raise `KeyError` the first
+time you looked up a `(state, action)` pair that's never been seen;
+`defaultdict(float)` instead silently creates that entry with value `0.0`
+on first access. This is exactly the standard "initialize Q-values to
+zero" step in the Q-learning algorithm, just implemented via a Python
+language feature instead of a manual pre-fill loop over all 108 possible
+keys.
+
+### `epsilon_for_episode(episode)`
+
+```python
+if episode >= self.epsilon_decay_episodes:
+    return self.epsilon_end
+progress = episode / self.epsilon_decay_episodes
+return self.epsilon_start + progress * (self.epsilon_end - self.epsilon_start)
+```
+Straight-line (linear) interpolation between `epsilon_start` and
+`epsilon_end`. At `episode=0`, `progress=0`, so it returns exactly
+`epsilon_start`. As `episode` approaches `epsilon_decay_episodes`,
+`progress` approaches 1, so it approaches exactly `epsilon_end`. Past that
+point, the `if` clamps it flat at `epsilon_end` forever — without this
+clamp, the formula would keep extrapolating past `epsilon_end` (e.g. going
+negative), which makes no sense for a probability.
+
+### `choose_action(state, epsilon)`
+
+```python
+if self._rng.random() < epsilon:
+    return self._rng.choice(ACTIONS)
+return self.best_action(state)
+```
+`self._rng.random()` draws a uniform random float in `[0, 1)`. If it lands
+below `epsilon`, that's the "explore" branch — pick uniformly at random
+from `ACTIONS` (`KEEP` or `SWITCH`), ignoring the Q-table entirely. This
+happens with probability exactly `epsilon`, which is the definition of
+epsilon-greedy. Otherwise ("exploit" branch, probability `1 - epsilon`),
+defer to `best_action`, which looks at the Q-table.
+
+### `best_action(state)`
+
+```python
+q_keep = self.q_table[(state, ACTIONS[0])]
+q_switch = self.q_table[(state, ACTIONS[1])]
+return ACTIONS[0] if q_keep >= q_switch else ACTIONS[1]
+```
+Reads both Q-values for this state directly out of the dict (triggering
+`defaultdict`'s 0.0 default for either one if unseen), and returns
+whichever action has the higher value. `>=` (not `>`) means ties go to
+`KEEP` — an arbitrary but deterministic tie-break, which matters for a
+never-visited state where both values are 0.0 and would otherwise tie.
+
+### `max_q_value(state)`
+
+```python
+return max(self.q_table[(state, a)] for a in ACTIONS)
+```
+This is `max_a' Q(s', a')` from the Bellman equation, computed directly:
+loop over both possible actions for the given state, take the larger
+Q-value. Used only inside `update()`, always applied to the *next* state.
+
+### `update(state, action, reward, next_state)` — the Bellman update
+
+This is the function the whole project is built to be able to explain.
+Line by line:
+
+```python
+current_q = self.q_table[(state, action)]
+```
+`Q(s, a)` — the agent's current, possibly wrong, estimate of how good it
+is to take `action` in `state`. This is what's about to get corrected.
+
+```python
+best_next_q = self.max_q_value(next_state)
+```
+`max_a' Q(s', a')` — the best value the agent currently believes is
+achievable from wherever it ended up (`next_state`), assuming it acts
+optimally from then on. This is the "look one step into the future"
+component of the update.
+
+```python
+td_target = reward + self.gamma * best_next_q
+```
+The "TD target" — what `Q(s, a)` *should* be, based on this one real
+transition: the reward actually received, plus the discounted value of
+the best thing achievable next. `gamma` (0.95 by default) controls how
+much that future value counts relative to the immediate reward.
+
+```python
+td_error = td_target - current_q
+```
+The "TD error" — the gap between what the estimate should be
+(`td_target`) and what it currently is (`current_q`). If this is 0, the
+old estimate was already exactly right for this transition and nothing
+changes below.
+
+```python
+new_q = current_q + self.alpha * td_error
+```
+Move the estimate toward the target, but only by a fraction `alpha`
+(0.1 by default) of the gap — not all the way. This is what makes
+learning stable when transitions are noisy (Poisson-random arrivals mean
+the same `(state, action)` pair won't always lead to the same reward or
+next state) — a small step size averages out the noise over many visits
+instead of overreacting to any single (possibly unlucky) transition.
+
+```python
+self.q_table[(state, action)] = new_q
+```
+Write the corrected estimate back into the table, overwriting the old
+one. Next time this exact `(state, action)` pair is visited, `current_q`
+in the next call will start from this updated value.
+
+**Reciting this from memory:** the five named intermediate variables
+(`current_q`, `best_next_q`, `td_target`, `td_error`, `new_q`) exist
+specifically so each line of the equation
+`Q(s,a) <- Q(s,a) + alpha[r + gamma*max_a'Q(s',a') - Q(s,a)]` has a
+one-to-one, nameable counterpart in code — that's the mapping to practice
+reciting on a whiteboard.
+
+### `train(env, num_episodes)`
+
+```python
+for episode in range(num_episodes):
+    state = env.reset()
+    epsilon = self.epsilon_for_episode(episode)
+    total_reward = 0.0
+    done = False
+    while not done:
+        action = self.choose_action(state, epsilon)
+        next_state, reward, done = env.step(action)
+        self.update(state, action, reward, next_state)
+        state = next_state
+        total_reward += reward
+    episode_rewards.append(total_reward)
+```
+One episode = one full call to `env.reset()` followed by stepping until
+`done`. Epsilon is computed once per episode (not per step) — the agent's
+exploration rate stays constant for the whole episode, then drops for the
+next one, per the schedule. Each step follows the standard RL loop: pick
+an action, take it, learn from what happened (`update`), advance
+(`state = next_state`), and accumulate `total_reward` purely for logging —
+it plays no role in the learning itself (that's entirely driven by
+per-step `update()` calls). The list of per-episode totals is returned so
+`evaluate.py` can later plot how reward changes across training.
+
+### `if __name__ == "__main__":` block
+
+Trains one agent for 500 episodes on a fixed-seed environment, then prints
+the Q-table size and average reward for the first vs. last 50 episodes, so
+an improving (less negative) trend can be checked immediately without
+needing `evaluate.py`'s plotting yet. Also prints epsilon at three points
+to sanity-check the decay schedule directly.
+
+---
+
 ## Other files (not yet built)
 
 This section will be filled in as each file is written:
-`q_learning_agent.py`, `baseline_controller.py`, `value_iteration.py`,
-`evaluate.py`, `visualize.py`.
+`baseline_controller.py`, `value_iteration.py`, `evaluate.py`,
+`visualize.py`.

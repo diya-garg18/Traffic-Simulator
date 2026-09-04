@@ -24,15 +24,21 @@ marking any change "done."
       `(0.5, 2.0)` for 7-8 (with `max_steps=9`, phase length 3).
 - [ ] Invalid action raises: `env.step("NOPE")` should raise `ValueError`.
 
-## `q_learning_agent.py` (once built)
+## `q_learning_agent.py`
 
-- [ ] Q-table only ever contains keys `(discretized_state, action)` where
-      `action` is one of `traffic_env.ACTIONS`.
-- [ ] Epsilon starts near 1.0 and decays toward the configured floor
-      (e.g. 0.05) over the configured number of episodes — print epsilon at
-      episode 0, midpoint, and final episode to confirm monotonic decay.
-- [ ] Training reward curve trends upward (less negative) over episodes —
-      compare mean reward of the first 10% of episodes vs. the last 10%.
+- [x] Q-table only ever contains keys `(discretized_state, action)` where
+      `action` is one of `traffic_env.ACTIONS` — by construction, every
+      write to `self.q_table` goes through `(state, action)` pairs sourced
+      from `ACTIONS` (`best_action`, `max_q_value`, `update`).
+- [x] Epsilon starts near 1.0 and decays toward the configured floor
+      (0.05) over the configured number of episodes:
+      ```
+      python -c "from q_learning_agent import QLearningAgent; a=QLearningAgent(epsilon_decay_episodes=300); print(a.epsilon_for_episode(0), a.epsilon_for_episode(150), a.epsilon_for_episode(500))"
+      ```
+      Result: `1.0 0.525 0.05` — monotonic decay confirmed.
+- [x] Training reward curve trends upward (less negative) over episodes:
+      `python q_learning_agent.py` on seed 7, 500 episodes ->
+      first 50 avg -423.0, last 50 avg -294.0.
 
 ## `baseline_controller.py` (once built)
 

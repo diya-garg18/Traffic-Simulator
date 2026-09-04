@@ -50,3 +50,43 @@ one entry cold and know exactly how that piece was built and validated.
 
 **Status:** Fully verified — core mechanics, episode termination, and
 rush-hour phase transitions all confirmed working.
+
+---
+
+## Feature: Tabular Q-learning agent (`q_learning_agent.py`)
+
+**Scoped from:** `prompt.txt` section "2. Q-Learning Agent".
+
+**What was built:**
+- `QLearningAgent` class with a `defaultdict(float)`-backed Q-table keyed by
+  `(discretized_state, action)`.
+- `epsilon_for_episode()`: linear decay from `epsilon_start` (1.0) to
+  `epsilon_end` (0.05) over `epsilon_decay_episodes`, then held flat.
+- `choose_action()`: epsilon-greedy selection.
+- `best_action()` / `max_q_value()`: greedy argmax / max helpers used by both
+  action selection and the update rule.
+- `update()`: the Bellman equation update, `Q(s,a) <- Q(s,a) + alpha*(r +
+  gamma*max_a' Q(s',a') - Q(s,a))`, with each intermediate value
+  (`current_q`, `best_next_q`, `td_target`, `td_error`, `new_q`) broken into
+  its own named line and commented against the equation.
+- `train()`: runs full episodes against a `TrafficEnv`, updating online after
+  every step, returning per-episode total reward for later plotting.
+- Configurable hyperparameters (alpha, gamma, epsilon schedule) — see
+  `DECISIONS.md` for the chosen defaults and reasoning.
+
+**What was tried / verified:**
+- Ran `python q_learning_agent.py`: trained 500 episodes on a fixed seed
+  (`rate_ns=0.8, rate_ew=0.5, max_steps=100, seed=7`).
+- Confirmed epsilon decay is monotonic and hits the right values: 1.000 at
+  episode 0, 0.525 at episode 150 (roughly the midpoint of the 300-episode
+  decay window), 0.050 at episode 500 (floor, past the decay window).
+- Confirmed learning is actually happening: average total reward per episode
+  rose from -423.0 (first 50 episodes) to -294.0 (last 50 episodes) — a
+  clear, large improvement, not noise.
+- Q-table ended with 54 visited (state, action) pairs out of a possible 108
+  (54 states x 2 actions) — expected, since low arrival rates mean HIGH-queue
+  states are rarely if ever visited in this particular scenario.
+
+**Status:** Smoke-tested, learning confirmed via reward trend. Deeper
+validation (does the resulting policy actually beat a naive baseline?) is
+deferred to `evaluate.py`.

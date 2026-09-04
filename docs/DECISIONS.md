@@ -5,6 +5,45 @@ what changed; this shows why. Newest entries at the top.
 
 ---
 
+## 2026-09-05 — Q-learning hyperparameters: alpha=0.1, gamma=0.95, epsilon 1.0->0.05 linear
+
+**Decision:** `q_learning_agent.py` defaults to learning rate 0.1, discount
+factor 0.95, epsilon decaying linearly from 1.0 to 0.05 over 500 episodes.
+
+**Why:** Alpha 0.1 is small enough to stay stable under Poisson-noisy
+transitions but large enough to learn in a few hundred episodes. Gamma 0.95
+was chosen because traffic control is a long-run queue-management problem —
+a myopic agent (low gamma) would never learn "hold the light a bit longer to
+fully drain a queue" tradeoffs. Epsilon starts at 1.0 (pure exploration on an
+empty table) and decays to a nonzero floor (0.05), not to 0, because arrivals
+never stop being random — the agent should never fully stop sampling.
+
+**Tradeoff accepted:** All three are hand-picked defaults, not tuned via a
+sweep. Smoke test (`python q_learning_agent.py`) confirms they're good enough
+to show learning (reward -423 -> -294 avg over 500 episodes on a fixed seed),
+but a hyperparameter sweep is explicitly out of scope for this project's
+goals (understanding > optimality).
+
+---
+
+## 2026-09-05 — Q-table uses `defaultdict(float)`, zero-initialization
+
+**Decision:** Unvisited (state, action) pairs implicitly read as 0.0 instead
+of being pre-populated or raising an error.
+
+**Why:** Simplest possible initialization; avoids having to enumerate all 54
+states up front. Zero is also a defensible optimistic-ish starting point
+here since most rewards are negative — an untried action defaulting to 0
+looks *better* than a poorly-performing known action, which mildly encourages
+trying new things even outside of epsilon-exploration.
+
+**Tradeoff accepted:** True optimistic initialization (e.g. starting at 0
+when true values are very negative) can bias early exploration in a
+specific direction; not analyzed further here since epsilon-greedy already
+handles exploration explicitly.
+
+---
+
 ## 2026-09-05 — Action representation: plain strings, not an Enum
 
 **Decision:** `ACTIONS = ("KEEP", "SWITCH")` as module-level string constants

@@ -68,7 +68,7 @@ identical environment.
 ## Status
 
 - [x] `traffic_env.py` — built, manually smoke-tested.
-- [ ] `q_learning_agent.py`
+- [x] `q_learning_agent.py` — built, smoke-tested (reward improves over training).
 - [ ] `baseline_controller.py`
 - [ ] `value_iteration.py` (stretch goal)
 - [ ] `evaluate.py`
