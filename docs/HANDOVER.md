@@ -32,6 +32,12 @@ state.
   dependency of `value_iteration.py`).
 - `README.md` — MDP formulation (state/action/reward/discount + why each
   choice), how to run every file, and the real `evaluate.py` results table.
+- `visualize.py` (optional) — text-frame demo of the Q-learning agent
+  driving the intersection. Smoke-tested, full 30-step run completes
+  cleanly, visibly shows the agent reacting to a growing queue.
+- **All code deliverables from the original spec are now built and
+  pushed.** Only remaining work is the interview-prep discussion
+  (Bellman walkthrough, Q&As, design tradeoffs) — no more code files.
 - Project is a git repo, pushed to
   https://github.com/diya-garg18/Traffic-Simulator (main branch). `prompt.txt`
   is intentionally NOT tracked (deleted from both local and GitHub, per
@@ -48,13 +54,12 @@ state.
 
 ## What's next
 
-1. `visualize.py` — optional simple animation/text demo (last remaining
-   code deliverable; explicitly marked optional in the original spec).
-2. Interview-prep walkthrough of the Bellman `update()` function line by
+1. Interview-prep walkthrough of the Bellman `update()` function line by
    line, 5 likely interview Q&As, and a list of genuine design tradeoffs
    to highlight (the `value_iteration.py` HIGH-bucket limitation is the
-   strongest candidate, already fully diagnosed).
-3. Keep pushing to GitHub after each meaningful chunk, with simple commit
+   strongest candidate, already fully diagnosed). This is the last
+   remaining item overall.
+2. Keep pushing to GitHub after each meaningful chunk, with simple commit
    messages (explicit standing user instruction).
 
 ## What to watch out for

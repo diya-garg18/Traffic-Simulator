@@ -711,7 +711,49 @@ episode — see `DECISIONS.md`).
 
 ---
 
+## `visualize.py` (optional)
+
+### Module purpose
+
+A "watch it work" demo, separate from `evaluate.py`'s measurement job.
+Trains a Q-learning agent, then prints one text frame per step showing
+each road's queue as an ASCII bar (`#` per car) and which road is green.
+
+### Why `DEMO_SEED` differs from `TRAIN_SEED`
+
+Same reasoning as `evaluate.py`: a demo run on the exact training seed
+would just replay a memorized trajectory, not show the agent handling a
+traffic pattern it has never seen. `DEMO_SEED = 999` is fresh.
+
+### `render_frame()`
+
+```python
+def render_frame(step, ns_count, ew_count, light, action, reward):
+    ns_marker = "GREEN" if light == "NS" else "red"
+    ew_marker = "GREEN" if light == "EW" else "red"
+    print(f"Step {step:>3} | action={action:<6} reward={reward:>6.1f}")
+    print(f"  NS [{ns_marker:>5}] {'#' * ns_count} ({ns_count})")
+    print(f"  EW [{ew_marker:>5}] {'#' * ew_count} ({ew_count})")
+    print()
+```
+
+One `#` character per waiting car — deliberately the simplest possible
+visualization, no plotting library needed. `light` decides which road's
+marker says `GREEN` vs `red`; only one is ever green at a time (mirrors
+`TrafficEnv`'s own rule).
+
+### What the smoke test showed
+
+Running `python visualize.py`: NS starts empty and green. EW's queue
+visibly grows (`#`, `##`, `###`) across several KEEP steps while NS holds
+green. At step 8, once EW has backed up to 3 cars, the agent SWITCHes —
+NS becomes red, EW becomes green, and EW's bar shrinks the next step as it
+drains. This is the discretized-state Q-learning policy visibly reacting
+to a real, growing queue — the exact behavior the whole project set out to
+produce, made directly watchable instead of only measurable.
+
+---
+
 ## Other files (not yet built)
 
-This section will be filled in as each file is written:
-`visualize.py`.
+None remaining — all files from the original spec are built.

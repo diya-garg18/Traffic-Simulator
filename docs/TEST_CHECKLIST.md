@@ -86,3 +86,14 @@ marking any change "done."
       policy, not just code that runs.
 - [x] All 3 plots saved without error: `plots/waiting_comparison.png`,
       `plots/training_reward.png`, `plots/rushhour_switching.png`.
+
+## `visualize.py` (optional)
+
+- [x] Runs to completion, exit code 0, all 30 demo steps printed (verified
+      via a redirected-output run: `python visualize.py > out.txt 2>&1`,
+      checked exit code and final frames).
+- [x] Visually confirmed reactive behavior: EW's queue bar grows step by
+      step while NS holds green, agent SWITCHes once EW backs up to 3
+      cars (step 8 in the observed run), EW's bar then shrinks as it
+      drains — not just "runs without crashing," but visibly the correct
+      learned behavior.

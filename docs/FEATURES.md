@@ -210,3 +210,29 @@ good as its model" for the interview-prep discussion — see `DECISIONS.md`.
   and value iteration both stay visibly flatter and lower throughout.
 
 **Status:** Fully verified — real run, real numbers, plots inspected.
+
+---
+
+## Feature: Text demo (`visualize.py`, optional)
+
+**Scoped from:** `prompt.txt` section "6. Visualization" (marked optional).
+
+**What was built:**
+- Trains a Q-learning agent (same hyperparameters as `evaluate.py`'s main
+  agent), then runs it against a fixed `DEMO_SEED` (different from the
+  training seed, same reasoning as `evaluate.py`) and prints one text
+  frame per step: an ASCII bar per road (one `#` per waiting car) plus
+  which road is currently green.
+- Deliberately minimal: plain `print()` and `time.sleep()`, no new
+  dependencies, no plotting library — this is a "watch it work" demo, not
+  a measurement tool (that's `evaluate.py`'s job).
+
+**What was tried / verified:**
+- Ran `python visualize.py`: watched the printed frames directly. NS
+  starts empty and green; EW queue visibly grows step by step
+  (`#`, `##`, `###`) while NS holds green; the agent SWITCHes at step 8
+  once EW reaches 3 cars, then drains it. Ran the full 30-step demo to
+  completion (exit code 0, no errors) via a redirected-output run to
+  confirm no crash partway through.
+
+**Status:** Fully verified.

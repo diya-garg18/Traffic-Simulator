@@ -74,4 +74,5 @@ identical environment.
   a known/documented model-approximation limitation, see DECISIONS.md.
 - [x] `evaluate.py` — built, runs all three controllers on the same seeded
   scenario, prints summary table, saves 3 plots to `plots/`.
-- [ ] `visualize.py` (optional)
+- [x] `visualize.py` (optional) — built, smoke-tested. Text-frame demo of
+  the Q-learning agent driving the intersection.
