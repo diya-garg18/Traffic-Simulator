@@ -1,0 +1,73 @@
+I'm a B.Tech CSE student building a Reinforcement Learning project for my coursework, and I need it to be something I can fully explain and defend in technical interviews — including writing core functions like the Q-learning update rule from memory on a whiteboard. Prioritize clean, well-commented, pedagogically clear code over cleverness or excessive abstraction. I want to understand every line, not just have something that "works."
+
+PROJECT: Adaptive Traffic Light Controller using Q-Learning
+
+Build a complete, runnable Python project with the following structure:
+
+## 1. Environment Simulator (traffic_env.py)
+
+Build a custom simulated traffic intersection environment (do NOT use Gymnasium/OpenAI Gym — I want to build the environment myself, from scratch, so I can explain the MDP formulation in an interview). It should support two roads at a 4-way intersection: North-South (NS) and East-West (EW).
+
+State representation:
+- cars_waiting_NS (integer count)
+- cars_waiting_EW (integer count)
+- current_light (NS or EW — whichever direction currently has green)
+- time_since_last_switch (integer, capped at some max for discretization)
+
+Provide a discretize_state() method that buckets raw car counts into LOW (0-3), MEDIUM (4-8), HIGH (9+) categories, and buckets time_since_last_switch into SHORT/MEDIUM/LONG — explain in a comment why discretization is necessary for tabular Q-learning (state space size).
+
+Dynamics:
+- At each time step, new cars arrive on each road following a Poisson process with configurable arrival rates (allow different rates for NS vs EW so I can simulate uneven traffic).
+- If a road's light is green, some fixed number of cars depart per step (e.g., 3), capped at the number actually waiting.
+- If a road's light is red, cars only accumulate.
+- Actions: KEEP (leave light as is) or SWITCH (flip which road has green, resets time_since_last_switch to 0).
+- Reward: negative of total cars waiting across both roads at each step, PLUS an additional small penalty (e.g., -5) if the action was SWITCH, to discourage rapid flickering. Explain this reward design choice in a comment.
+
+Include a step(action) method returning (next_state, reward, done) following a standard RL environment interface, and a reset() method.
+
+Also implement a "rush hour" mode: arrival rates that change over simulated time (e.g., higher NS arrival rate in one phase, higher EW arrival rate in another), so I can later demonstrate the agent adapting to changing traffic patterns.
+
+## 2. Q-Learning Agent (q_learning_agent.py)
+
+Implement tabular Q-learning FROM SCRATCH (no external RL libraries like Stable-Baselines3 — I need to write and understand the update rule myself).
+
+Requirements:
+- Q-table implemented as a dictionary keyed by (discretized_state, action).
+- Epsilon-greedy action selection, with epsilon decaying over training episodes (start near 1.0, decay toward a small floor like 0.05) — implement and comment the decay schedule clearly.
+- The core Q-value update function, written clearly with inline comments mapping each line back to the Bellman equation: Q(s,a) ← Q(s,a) + α[r + γ·max_a' Q(s',a') − Q(s,a)]. I want to be able to recite and explain this function without looking at notes.
+- Configurable hyperparameters: learning rate (alpha), discount factor (gamma), epsilon start/end/decay rate.
+- A train() method that runs the agent through many episodes against the environment, logging total reward per episode for later plotting.
+
+## 3. Baseline Comparison (baseline_controller.py)
+
+Implement a simple fixed-timer traffic light controller (switches every N steps regardless of traffic) as a baseline, using the SAME environment interface, so I can run a fair, apples-to-apples comparison against the learned Q-learning policy.
+
+## 4. Dynamic Programming Comparison (value_iteration.py) — stretch goal, include if feasible
+
+Since I control the simulator and therefore know the true transition dynamics, implement Value Iteration to compute the mathematically optimal policy directly from the known MDP model. Structure this so I can clearly explain the difference between "planning with a known model" (Value Iteration / Dynamic Programming) and "learning without one" (Q-learning) — this connects two units of my syllabus and I want to be able to discuss the comparison intelligently.
+
+## 5. Evaluation & Visualization (evaluate.py)
+
+- Run the trained Q-learning agent, the fixed-timer baseline, and (if implemented) the Value Iteration policy on the SAME sequence of simulated traffic conditions (use a fixed random seed for fair comparison).
+- Track and plot: average cars waiting over time for each approach, on the same graph, clearly labeled.
+- Plot training curves: total reward per episode over training, to show learning is actually happening (should trend upward/less negative over time).
+- Print a summary table: average wait time, max queue length reached, and number of light switches for each approach.
+- If rush hour mode is used, show a separate plot demonstrating how the Q-learning agent's switching behavior adapts across the different traffic phases, compared to the baseline's fixed behavior.
+
+## 6. Optional: Simple Visualization (visualize.py)
+
+A basic matplotlib animation or step-by-step text/plot showing cars queueing on each road and the light switching, for demo purposes. Keep this simple — doesn't need to be polished, just needs to make a live demo intuitive.
+
+## Code quality requirements throughout:
+- Extensive comments explaining WHY design decisions were made, not just what the code does — I need to be able to justify choices like the discretization buckets, reward shaping, hyperparameter values, etc.
+- Type hints on function signatures.
+- No unnecessary abstraction or design patterns — keep it as simple and readable as the problem allows. This is meant to be fully understood by one undergraduate student, not handed off to a team.
+- Include a README.md explaining: the MDP formulation (state/action/reward/discount factor with justification for each), how to run the training and evaluation, and a summary of expected results.
+- Include a requirements.txt (should be minimal — numpy, matplotlib, maybe scipy for the Poisson sampling, nothing else).
+
+## After building this, please also:
+- Walk me through the Q-learning update function line by line as if preparing me for an interview question about it.
+- Give me 5 likely interview questions about this project (e.g., "why tabular Q-learning instead of DQN here," "how would you extend this to a 4-way intersection with turning lanes," "how did you validate the reward function was well-designed") along with strong, honest answers I could give.
+- Point out any part of the implementation that involved a real design tradeoff, so I know what to highlight as "engineering decisions I made" rather than just "code that works."
+
+Build this iteratively — start with the environment simulator and get me to confirm it behaves sensibly (e.g., print a few manual steps) before building the agent on top of it.
