@@ -90,3 +90,27 @@ rush-hour phase transitions all confirmed working.
 **Status:** Smoke-tested, learning confirmed via reward trend. Deeper
 validation (does the resulting policy actually beat a naive baseline?) is
 deferred to `evaluate.py`.
+
+---
+
+## Feature: Fixed-timer baseline (`baseline_controller.py`)
+
+**Scoped from:** `prompt.txt` section "3. Baseline Comparison".
+
+**What was built:**
+- `FixedTimerController` class: switches every `switch_every` steps
+  (default 10), tracked via its own internal counter, ignoring the
+  environment's state entirely.
+- `choose_action(state)` keeps the same call shape as
+  `QLearningAgent.choose_action` (even though `state` is unused) so
+  `evaluate.py` can swap controllers without special-casing either one.
+- `reset()` to resync the controller's internal clock with a fresh episode.
+
+**What was tried / verified:**
+- Ran `python baseline_controller.py`: 20 steps, `switch_every=5`, fixed
+  seed. Confirmed SWITCH fires exactly at steps 4, 9, 14, 19 (every 5th
+  step, 0-indexed) regardless of queue size — e.g. step 17 shows 7 cars
+  waiting on EW and the controller still doesn't switch early, proving it
+  truly ignores traffic.
+
+**Status:** Fully verified.

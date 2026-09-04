@@ -350,8 +350,60 @@ to sanity-check the decay schedule directly.
 
 ---
 
+## `baseline_controller.py`
+
+### Module purpose
+
+The "dumb" comparison point: a controller that switches on a fixed
+schedule and never looks at traffic at all. This is what makes it possible
+to later claim "the learned policy is better than X" with X being a
+concrete, well-defined thing, not a strawman.
+
+### `FixedTimerController.__init__` / `reset`
+
+Stores `switch_every` and initializes `steps_since_switch = 0`.
+`reset()` exists as its own method (rather than just re-running `__init__`
+logic) because `evaluate.py` will call it every time `env.reset()` is
+called, to keep the controller's internal clock in sync with a fresh
+episode — without this, the controller's very first action of episode 2
+would be based on however many steps happened to elapse at the end of
+episode 1, which would make the "switches every N steps" guarantee false
+across episode boundaries.
+
+### `choose_action(state)`
+
+```python
+if self.steps_since_switch >= self.switch_every - 1:
+    self.steps_since_switch = 0
+    return ACTION_SWITCH
+self.steps_since_switch += 1
+return ACTION_KEEP
+```
+`state` is accepted as a parameter but never read inside the method body —
+this is deliberate (see `DECISIONS.md`), purely to keep the same call
+shape as `QLearningAgent.choose_action(state, epsilon)` minus the epsilon
+argument, so `evaluate.py` can call `controller.choose_action(state)` on
+whichever controller is currently active without an if/else branch per
+controller type.
+
+The `>= switch_every - 1` (not `>= switch_every`) is what makes a light
+held for exactly `switch_every` steps: counting starts at 0, so after
+`switch_every - 1` KEEP-equivalent ticks have already passed since the
+last switch, this step should be the switch. Off-by-one here is exactly
+the kind of thing to double check with a manual trace, which is what the
+`__main__` block below does.
+
+### `if __name__ == "__main__":` block
+
+Runs the controller against a real `TrafficEnv` for 20 steps with
+`switch_every=5`, printing the light and both raw queue counts every step,
+specifically so the "switches exactly every 5 steps, ignores queue size"
+claim can be checked by eye (see `TEST_CHECKLIST.md` for the exact
+confirmed step numbers).
+
+---
+
 ## Other files (not yet built)
 
 This section will be filled in as each file is written:
-`baseline_controller.py`, `value_iteration.py`, `evaluate.py`,
-`visualize.py`.
+`value_iteration.py`, `evaluate.py`, `visualize.py`.

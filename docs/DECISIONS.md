@@ -5,6 +5,28 @@ what changed; this shows why. Newest entries at the top.
 
 ---
 
+## 2026-09-05 — Baseline switches every 10 steps by default, tracks its own clock
+
+**Decision:** `FixedTimerController` counts steps internally
+(`self.steps_since_switch`), rather than reading `time_since_last_switch`
+out of the environment's discretized state.
+
+**Why:** A real fixed-timer light has its own physical clock; it does not
+sense the environment at all. Reading the env's internal timer would be
+cheating relative to what this baseline is supposed to represent, and would
+also break if evaluate.py ever ran the baseline against a differently
+configured env. Default `switch_every=10` is a reasonable "no worse than
+one long departure phase" choice, deliberately not tuned to be optimal —
+the baseline is supposed to be dumb.
+
+**Tradeoff accepted:** `choose_action(state)` still takes `state` as a
+parameter even though it's ignored, purely so its call signature matches
+`QLearningAgent.choose_action` and both can be swapped interchangeably in
+evaluate.py's loop. This is a very small, deliberate abstraction leak in
+favor of interface consistency.
+
+---
+
 ## 2026-09-05 — Q-learning hyperparameters: alpha=0.1, gamma=0.95, epsilon 1.0->0.05 linear
 
 **Decision:** `q_learning_agent.py` defaults to learning rate 0.1, discount

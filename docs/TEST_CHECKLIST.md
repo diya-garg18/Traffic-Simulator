@@ -40,11 +40,12 @@ marking any change "done."
       `python q_learning_agent.py` on seed 7, 500 episodes ->
       first 50 avg -423.0, last 50 avg -294.0.
 
-## `baseline_controller.py` (once built)
+## `baseline_controller.py`
 
-- [ ] Switches exactly every N steps regardless of queue state — verify by
-      logging `current_light` and confirming it flips precisely every N
-      calls to `act()`.
+- [x] Switches exactly every N steps regardless of queue state:
+      `python baseline_controller.py` (`switch_every=5`, seed=3, 20 steps)
+      -> SWITCH at steps 4, 9, 14, 19 exactly, including step 17 where EW
+      has 7 cars waiting and it still doesn't switch early.
 
 ## `value_iteration.py` (once built, stretch goal)
 
