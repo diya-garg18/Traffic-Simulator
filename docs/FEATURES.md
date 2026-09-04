@@ -114,3 +114,49 @@ deferred to `evaluate.py`.
   truly ignores traffic.
 
 **Status:** Fully verified.
+
+---
+
+## Feature: Value iteration planner (`value_iteration.py`, stretch goal)
+
+**Scoped from:** `prompt.txt` section "4. Dynamic Programming Comparison".
+
+**What was built:**
+- `_build_road_transition_table(rate)`: precomputes, per road, a
+  bucket-to-bucket transition distribution and expected count-after, using
+  one representative raw count per bucket (LOW=2, MEDIUM=6, HIGH=12) and
+  summing the Poisson arrival distribution (via `scipy.stats.poisson.pmf`)
+  up to `MAX_ARRIVALS_TO_SUM=30`.
+- `ValueIteration` class: builds the 378-state finite MDP
+  (3 car-buckets x 3 car-buckets x 2 lights x 21 exact time-counter values),
+  runs the Bellman optimality update to convergence (`solve()`), and
+  extracts the greedy policy.
+- `choose_action(env)`: reads `env.state` directly (raw counts, exact time
+  counter) — the one module allowed to do this per `ARCHITECTURE.md`.
+
+**What was tried / verified:**
+- Ran `python value_iteration.py`: converged in 197 iterations (well under
+  the 1000-iteration cap), policy covers all 378 states.
+- Ran the resulting policy against the REAL environment (same seed=42,
+  rates as `traffic_env.py`'s own trace). Cross-checked the printed raw
+  counts step-by-step against the original `traffic_env.py` trace (same
+  seed) to confirm the environment's random arrival draws are positional
+  (depend only on step index, not action history) — confirmed consistent,
+  ruling out an RNG/state-tracking bug.
+- **Found and diagnosed a real model limitation, not a code bug:** the
+  policy sometimes refuses to SWITCH out of a badly backed-up HIGH queue,
+  and visibly flickers (SWITCH immediately followed by SWITCH back) when
+  run against the real environment. Traced this to the HIGH bucket's
+  single representative count (12): departing 3 cars (12 -> 9) still
+  counts as HIGH, so the model's future-value term sees no benefit from
+  switching, only the -5 switch-penalty cost. Verified directly by
+  printing `Q(KEEP)=-263.71` vs `Q(SWITCH)=-276.81` at state
+  `('LOW','HIGH','NS',10)` and confirming the underlying reward/transition
+  breakdown matches this explanation exactly. Full writeup in
+  `DECISIONS.md`.
+
+**Status:** Code verified correct; the resulting POLICY has a known,
+diagnosed, documented limitation stemming from the bucket-approximation
+model, not a bug. This is intentionally kept (not patched around) because
+it's a genuinely useful, concrete illustration of "planning is only as
+good as its model" for the interview-prep discussion — see `DECISIONS.md`.

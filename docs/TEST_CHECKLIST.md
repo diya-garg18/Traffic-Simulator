@@ -47,12 +47,22 @@ marking any change "done."
       -> SWITCH at steps 4, 9, 14, 19 exactly, including step 17 where EW
       has 7 cars waiting and it still doesn't switch early.
 
-## `value_iteration.py` (once built, stretch goal)
+## `value_iteration.py` (stretch goal)
 
-- [ ] Value function converges (max change between sweeps drops below a
-      small threshold) within a bounded number of iterations.
-- [ ] Resulting policy is deterministic and covers all 54 discretized
-      states.
+- [x] Value function converges within a bounded number of iterations:
+      `python value_iteration.py` -> "Converged after 197 iterations"
+      (cap is 1000).
+- [x] Resulting policy is deterministic and covers all planner states
+      (378 = 3x3x2x21, not 54 — this planner keeps the exact time counter
+      rather than bucketing it; see `CODE_EXPLAINED.md`).
+- [x] Cross-checked random arrival draws are positional (same seed + same
+      step index -> same arrival numbers regardless of action history) by
+      comparing this file's `__main__` trace against `traffic_env.py`'s
+      own trace at matching steps — confirms no RNG/state bug.
+- [ ] Known limitation, not yet fixed: policy can decline to SWITCH out of
+      a HIGH queue and can flicker (SWITCH immediately reversed) — root
+      cause identified and documented in `DECISIONS.md`, intentionally not
+      patched (see rationale there).
 
 ## `evaluate.py` (once built)
 

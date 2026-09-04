@@ -5,6 +5,52 @@ what changed; this shows why. Newest entries at the top.
 
 ---
 
+## 2026-09-05 — Value iteration plans over bucketed states using one representative count per bucket
+
+**Decision:** `value_iteration.py` solves an APPROXIMATE finite MDP: states
+use the same LOW/MEDIUM/HIGH car buckets as Q-learning, but transition
+probabilities and rewards are computed by pretending each bucket's true
+count is always one fixed "representative" value (LOW=2, MEDIUM=6,
+HIGH=12), not the real (unbounded, exact) count.
+
+**Why:** True dynamic programming needs a FINITE state space to sweep
+over. TrafficEnv's real state space is infinite (queues are unbounded), so
+exact DP over it is impossible. Bucketing collapses it to 378 states
+(3 x 3 x 2 x 21), small enough to solve in under 200 iterations.
+
+**Tradeoff accepted — and this is a REAL, OBSERVED one, not theoretical:**
+Collapsing an entire open-ended bucket (HIGH = "9 or more") to one anchor
+value (12) hides how much a partial departure actually helps. Diagnostic
+check on state `('LOW', 'HIGH', 'NS', 10)`:
+```
+KEEP:   ns_exp=0.5,  ew_exp=12.6, ew stays HIGH with probability 1.0, Q=-263.71
+SWITCH: ns_exp=3.2,  ew_exp=9.6,  ew stays HIGH with probability 1.0, Q=-276.81
+```
+Departing 3 cars from the HIGH anchor (12 -> 9) is still classified HIGH
+(the bucket is "9+"), so the FUTURE-value term sees zero benefit from
+switching — even though the immediate reward term correctly registers the
+queue as smaller (9 vs 12). Combined with the flat SWITCH_PENALTY (5) and
+the cost of neglecting NS while EW is served, the planner ends up
+preferring to just KEEP holding NS green even though EW is badly backed
+up, and its resulting policy visibly flickers (back-to-back SWITCH/SWITCH)
+when run against the real environment — see `docs/FEATURES.md` for the
+concrete trace. This is exactly the "planning is only as good as the
+model" lesson: a hand-built approximate model can produce a policy that is
+optimal FOR THAT MODEL but visibly suboptimal against the real dynamics.
+Q-learning has no equivalent failure mode here, since it learns directly
+from real transitions rather than a hand-built approximation of them —
+this is the single best concrete talking point for "why model-free
+learning can beat planning when the model is imperfect."
+
+**What would fix it (not implemented, out of scope):** finer buckets
+specifically at the high end (e.g. splitting HIGH into 9-14 / 15+), or
+tracking a full distribution over counts within each bucket instead of one
+point estimate. Both add real complexity for a coursework project whose
+goal is understanding the core algorithms, not building a production-grade
+planner — left as a known, documented limitation instead.
+
+---
+
 ## 2026-09-05 — Baseline switches every 10 steps by default, tracks its own clock
 
 **Decision:** `FixedTimerController` counts steps internally

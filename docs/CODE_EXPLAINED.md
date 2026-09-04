@@ -403,7 +403,186 @@ confirmed step numbers).
 
 ---
 
+## `value_iteration.py`
+
+### Module purpose
+
+Computes the mathematically optimal policy directly from a KNOWN model of
+the environment's dynamics — no trial and error, no sampling, no
+`env.step()` calls during learning at all. This is "planning," the
+opposite paradigm from `q_learning_agent.py`'s "learning."
+
+### Why it needs its own approximate model
+
+`TrafficEnv`'s true state (exact car counts) is unbounded, so an exact
+dynamic-programming sweep over "every possible state" is literally
+impossible — there are infinitely many. This file works around that by
+planning over the same LOW/MEDIUM/HIGH bucket abstraction Q-learning uses,
+picking one "representative" raw count per bucket (`BUCKET_REPRESENTATIVE_COUNT`)
+to stand in for "any count in this bucket" when computing arrival
+probabilities. This is a real approximation with a real, observed cost —
+see the "HIGH bucket" discussion below and `DECISIONS.md`.
+
+### `CAR_BUCKETS`, `LIGHTS`, `BUCKET_REPRESENTATIVE_COUNT`, `MAX_ARRIVALS_TO_SUM`
+
+Module-level constants. `BUCKET_REPRESENTATIVE_COUNT = {"LOW": 2, "MEDIUM":
+6, "HIGH": 12}` picks the middle of each closed range (LOW 0-3, MEDIUM
+4-8) and a fixed anchor above HIGH's open-ended lower bound (9+).
+`MAX_ARRIVALS_TO_SUM = 30` truncates the (infinite) Poisson sum used below
+— 30 is far more than enough for the arrival rates used in this project,
+so the truncated-away probability mass is negligible.
+
+### `VIState`
+
+```python
+VIState = Tuple[str, str, str, int]
+```
+This planner's own state representation: `(ns_bucket, ew_bucket, light,
+exact_time_since_switch)`. Note the LAST element is an `int` (0-20), not a
+SHORT/MEDIUM/LONG string like the Q-learning agent's states. Time-since-
+switch transitions are fully deterministic given the action (no
+randomness involved at all), so there's no approximation cost to keeping
+it exact — only the two stochastic car-count dimensions need bucketing.
+
+### `_build_road_transition_table(rate)`
+
+For ONE road, precomputes a lookup table keyed by `(current_bucket,
+is_green)`, each entry holding: (a) a probability distribution over the
+NEXT bucket, and (b) the expected raw count after this step (used later
+for reward). Built once per road before value iteration starts, since a
+road's own arrivals/departures don't depend on the other road or on
+light/time at all — only on its own bucket and whether it's currently
+green.
+
+Inner loop:
+```python
+for arrivals in range(MAX_ARRIVALS_TO_SUM + 1):
+    p_arrivals = poisson.pmf(arrivals, rate)
+    count_after_arrival = representative_count + arrivals
+    if is_green:
+        departing = min(DEPARTURE_RATE, count_after_arrival)
+        count_after = count_after_arrival - departing
+    else:
+        count_after = count_after_arrival
+    next_bucket = TrafficEnv._bucket_cars(count_after)
+    next_bucket_probs[next_bucket] += p_arrivals
+    expected_count_after += p_arrivals * count_after
+```
+This mirrors `TrafficEnv.step()`'s own arrival-then-departure logic
+exactly (reusing `TrafficEnv._bucket_cars` directly rather than
+duplicating the threshold logic — one source of truth for what LOW/
+MEDIUM/HIGH mean). For every possible number of arrivals (weighted by how
+likely that many arrivals actually is, `poisson.pmf`), compute what bucket
+the road ends up in, and accumulate that probability into
+`next_bucket_probs`. `expected_count_after` accumulates the
+probability-weighted raw count, used later as the expected reward
+contribution. After the loop, probabilities are renormalized to sum to
+exactly 1.0 (correcting for the small mass lost to truncation).
+
+### `ValueIteration.__init__`
+
+Builds both roads' transition tables up front, enumerates all 378 states
+(`itertools.product` over the two 3-bucket dimensions, 2 lights, and 21
+time-counter values), and initializes every state's value to 0.0 — the
+standard value-iteration starting point (like Q-learning's zero-initialized
+Q-table, but here it's a full sweep table, not learned incrementally).
+
+### `_next_light_and_time(state, action)`
+
+Purely deterministic — applying an action to `(light, time_since_switch)`
+never depends on car counts. Exactly mirrors the corresponding lines in
+`TrafficEnv.step()`'s "apply the action" phase.
+
+### `_q_value(state, action)` — one Bellman backup
+
+```python
+reward = -(ns_expected_count + ew_expected_count)
+if action == ACTION_SWITCH:
+    reward -= SWITCH_PENALTY
+
+expected_future_value = 0.0
+for next_ns, p_ns in ns_probs.items():
+    for next_ew, p_ew in ew_probs.items():
+        next_state = (next_ns, next_ew, next_light, next_time)
+        expected_future_value += p_ns * p_ew * self.value[next_state]
+
+return reward + self.gamma * expected_future_value
+```
+This is `R(s,a) + gamma * sum_s' P(s'|s,a) * V(s')` computed directly.
+Because NS and EW arrivals are independent random variables, the joint
+probability of landing in `(next_ns, next_ew)` is just `p_ns * p_ew` — no
+need to model a joint distribution explicitly, a simple nested loop over
+3x3=9 combinations suffices. Compare this to
+`q_learning_agent.QLearningAgent.update()`: the STRUCTURE of the equation
+is identical (`reward + gamma * something`), but here "something" is an
+exact expectation over a known distribution, while in Q-learning it's
+`max_a' Q(s',a')` from a single SAMPLED next state. That's the entire
+planning-vs-learning distinction, visible directly in code.
+
+### `solve()`
+
+Standard value-iteration sweep: repeatedly recompute every state's value
+as the best achievable `_q_value` over both actions, tracking the largest
+change (`max_delta`) seen in that sweep. Stops early once `max_delta` drops
+below `theta` (converged) or after `max_iterations` sweeps (safety cap).
+A final pass extracts the greedy policy (`argmax` instead of `max`) once
+the values have stabilized — computing the policy on possibly-still-moving
+values during the main loop would be wasted work, since only the FINAL
+values matter for the FINAL policy.
+
+### `choose_action(env)`
+
+Unlike the other two controllers' `choose_action(state)`, this one takes
+the whole `env` object and reads `env.state` directly — the raw car
+counts and the EXACT time counter, not the discretized tuple `env.step()`
+would return to an agent. This is deliberate and matches
+`ARCHITECTURE.md`: value iteration represents "planning with a known
+model," which includes knowing the true state, not just an agent's-eye
+bucketed view of it.
+
+### A genuine, observed limitation (not a bug) — read this before treating the planner's policy as "the correct answer"
+
+Diagnostic check on state `('LOW', 'HIGH', 'NS', 10)` (NS clear, EW badly
+backed up, NS has had green for a while):
+```
+KEEP:   Q = -263.71   (ew stays classified HIGH, probability 1.0)
+SWITCH: Q = -276.81   (ew stays classified HIGH, probability 1.0)
+```
+Both actions leave EW in the HIGH bucket with 100% probability, because
+departing 3 cars from the representative HIGH count (12 -> 9) still
+satisfies "9 or more." The model's FUTURE-value term therefore sees zero
+benefit from switching — it only "sees" the -5 switch penalty and NS's
+own queue starting to build (since NS becomes red). The actual reward term
+DOES register the improvement (12.6 expected vs 9.6 expected — see
+`DECISIONS.md`), but that's only a one-step effect; the future-value term,
+which dominates over a long horizon, cannot tell the difference between
+"just barely HIGH" and "catastrophically HIGH." The result: the planner's
+policy sometimes refuses to relieve a backed-up road, and can flicker
+(SWITCH immediately followed by SWITCH back) when run against the real
+environment — verified directly in this file's own `__main__` trace.
+
+This was confirmed to be a property of the APPROXIMATE MODEL, not a code
+bug, by manually recomputing `_q_value` for both actions at that state and
+checking the arithmetic matches the printed numbers exactly (see
+`DECISIONS.md` and `FEATURES.md` for the full investigation). It is kept,
+not patched around, because it is one of the strongest, most concrete,
+most honest "design tradeoff" talking points in the whole project: a
+hand-built model that's slightly wrong can produce a confidently-computed
+"optimal" policy that is actually worse than a model-free method that
+never needed a model to be right in the first place.
+
+### `if __name__ == "__main__":` block
+
+Solves the planner for the same rates used in `traffic_env.py`'s own
+trace, prints convergence info and a few illustrative state/policy/value
+triples, then runs the resulting policy against a REAL environment
+(same seed) and prints a trace in the same format as the other files'
+smoke tests — this is the trace that surfaced the HIGH-bucket limitation
+above.
+
+---
+
 ## Other files (not yet built)
 
 This section will be filled in as each file is written:
-`value_iteration.py`, `evaluate.py`, `visualize.py`.
+`evaluate.py`, `visualize.py`.
